@@ -44,8 +44,8 @@ const state = {
 
 // --- Three.js 设置 ---
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1a1a2e);
-scene.fog = new THREE.Fog(0x1a1a2e, 20, 60);
+scene.background = new THREE.Color(0x050510); // 深色赛博背景
+scene.fog = new THREE.FogExp2(0x050510, 0.02); // 雾气
 
 const camera = new THREE.PerspectiveCamera(
   60,
@@ -53,60 +53,180 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   100
 );
-camera.position.set(0, 15, 10);
-camera.lookAt(0, 0, -10);
+camera.position.set(0, 20, 15); // 稍微抬高视角
+camera.lookAt(0, 0, -5);
 
 const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
 renderer.shadowMap.enabled = true;
 
 // 灯光
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+const ambientLight = new THREE.AmbientLight(0x404060, 1.0); // 偏蓝环境光
 scene.add(ambientLight);
 
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+const dirLight = new THREE.DirectionalLight(0xaaccff, 1.5); // 冷色主光
 dirLight.position.set(10, 20, 10);
 dirLight.castShadow = true;
 scene.add(dirLight);
 
+// 点光源模拟发光
+const pointLight = new THREE.PointLight(0x00d2ff, 1, 20);
+pointLight.position.set(0, 2, 5);
+scene.add(pointLight);
+
+// --- 辅助贴图生成 ---
+function createGlowTexture(colorStr) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+
+  const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gradient.addColorStop(0, "rgba(255, 255, 255, 1)");
+  gradient.addColorStop(0.4, colorStr); // 核心颜色
+  gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 64, 64);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  return texture;
+}
+
+function createStripeTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = "#111";
+  ctx.fillRect(0, 0, 64, 64);
+
+  ctx.strokeStyle = "#00ccff"; // 蓝色条纹
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(64, 64);
+  ctx.moveTo(32, 0);
+  ctx.lineTo(64, 32);
+  ctx.moveTo(0, 32);
+  ctx.lineTo(32, 64);
+  ctx.stroke();
+
+  // 眼睛
+  ctx.fillStyle = "#00ffff"; // 亮青色眼睛
+  ctx.shadowColor = "#00ccff";
+  ctx.shadowBlur = 20;
+  ctx.fillRect(10, 20, 15, 8);
+  ctx.fillRect(39, 20, 15, 8);
+
+  // 增加边缘高光
+  ctx.strokeStyle = "#444";
+
+  return new THREE.CanvasTexture(canvas);
+}
+
+// --- 场景物体 ---
+
 // 地面
-const planeGeometry = new THREE.PlaneGeometry(20, 100);
-const planeMaterial = new THREE.MeshStandardMaterial({ color: 0x333344 });
+const planeGeometry = new THREE.PlaneGeometry(100, 100);
+const planeMaterial = new THREE.MeshStandardMaterial({
+  color: 0x0a0a1a,
+  roughness: 0.8,
+  metalness: 0.2,
+});
 const plane = new THREE.Mesh(planeGeometry, planeMaterial);
 plane.rotation.x = -Math.PI / 2;
 plane.position.z = -20;
 plane.receiveShadow = true;
 scene.add(plane);
 
-const gridHelper = new THREE.GridHelper(20, 20, 0x555566, 0x333344);
+// 霓虹网格
+const gridHelper = new THREE.GridHelper(100, 50, 0x00d2ff, 0x111133);
 gridHelper.position.z = -20;
 scene.add(gridHelper);
 
-// 玩家
-const playerGeo = new THREE.BoxGeometry(2, 2, 2);
-const playerMat = new THREE.MeshStandardMaterial({ color: 0x00d2ff });
-const player = new THREE.Mesh(playerGeo, playerMat);
-player.position.set(0, 1, 5);
-player.castShadow = true;
-scene.add(player);
+// 玩家 (赛博炮塔)
+const playerGroup = new THREE.Group();
+
+// 底座
+const baseGeo = new THREE.CylinderGeometry(1.5, 2, 0.5, 8);
+const baseMat = new THREE.MeshStandardMaterial({
+  color: 0x222222,
+  roughness: 0.3,
+  metalness: 0.8,
+});
+const base = new THREE.Mesh(baseGeo, baseMat);
+base.position.y = 0.25;
+playerGroup.add(base);
+
+// 塔身
+const turretGeo = new THREE.BoxGeometry(1.5, 1.2, 2);
+const turretMat = new THREE.MeshStandardMaterial({
+  color: 0x00d2ff,
+  emissive: 0x0044aa,
+  emissiveIntensity: 0.5,
+  roughness: 0.2,
+  metalness: 0.9,
+});
+const turret = new THREE.Mesh(turretGeo, turretMat);
+turret.position.y = 1.0;
+playerGroup.add(turret);
+
+// 枪管
+const barrelGeo = new THREE.CylinderGeometry(0.2, 0.2, 2.5);
+const barrelMat = new THREE.MeshStandardMaterial({ color: 0x888888 });
+const barrelLeft = new THREE.Mesh(barrelGeo, barrelMat);
+barrelLeft.rotation.x = Math.PI / 2;
+barrelLeft.position.set(-0.4, 1.0, -1.5);
+playerGroup.add(barrelLeft);
+
+const barrelRight = new THREE.Mesh(barrelGeo, barrelMat);
+barrelRight.rotation.x = Math.PI / 2;
+barrelRight.position.set(0.4, 1.0, -1.5);
+playerGroup.add(barrelRight);
+
+playerGroup.position.set(0, 0, 5);
+scene.add(playerGroup);
 
 // --- 实例化渲染设置 ---
 const dummy = new THREE.Object3D();
 
-// 1. 敌人实例
-const enemyGeo = new THREE.BoxGeometry(1.5, 1.5, 1.5);
-const enemyMat = new THREE.MeshStandardMaterial({ color: 0xff4d4d });
+// 1. 敌人实例 (深色机甲 + 发光纹理)
+const enemyGeo = new THREE.BoxGeometry(1.2, 1.2, 1.2);
+const enemyTexture = createStripeTexture();
+const enemyMat = new THREE.MeshStandardMaterial({
+  map: enemyTexture,
+  color: 0xffffff,
+  roughness: 0.7,
+  metalness: 0.1,
+  emissive: 0x001133, // 深蓝色自发光
+  emissiveIntensity: 0.5,
+});
 const enemyMesh = new THREE.InstancedMesh(enemyGeo, enemyMat, MAX_ENEMIES);
 enemyMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 enemyMesh.castShadow = true;
 enemyMesh.receiveShadow = true;
 scene.add(enemyMesh);
 
-// 2. 子弹实例
-const bulletGeo = new THREE.SphereGeometry(0.3, 8, 8);
-const bulletMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+// 2. 子弹实例 (发光胶囊)
+const bulletGeo = new THREE.CapsuleGeometry(0.15, 0.6, 4, 8);
+const bulletMat = new THREE.MeshBasicMaterial({
+  color: 0x00ffff,
+  transparent: true,
+  opacity: 0.9,
+});
+// 旋转胶囊使其平躺
+bulletGeo.rotateX(Math.PI / 2);
+
 const bulletMesh = new THREE.InstancedMesh(bulletGeo, bulletMat, MAX_BULLETS);
 bulletMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 scene.add(bulletMesh);
+
+// 子弹辉光 Sprite (单独渲染以获得更好的发光效果)
+// 为了性能，这里我们简化：直接让 MeshBasicMaterial 亮一点
+// 或者使用 AdditiveBlending 的 Sprite 系统？
+// 考虑到 500 个子弹，使用 Sprite 系统可能太重。
+// 我们在碰撞时产生辉光粒子即可。
 
 // --- 空间网格系统 ---
 const spatialGrid = new Map();
@@ -178,10 +298,6 @@ function triggerLevelUp() {
     if (pool.length === 0) break;
     const idx = Math.floor(Math.random() * pool.length);
     choices.push(pool[idx]);
-    // pool.splice(idx, 1); // 允许重复？目前是的，让我们保留在池中或移除？
-    // 通常 Roguelike 允许叠加。所以我们不从池中移除。
-    // 但是我们不应该在一次选择中显示相同的技能两次？
-    // 让我们从临时池中移除以避免一次选择中出现重复。
     pool.splice(idx, 1);
   }
 
@@ -192,7 +308,7 @@ function triggerLevelUp() {
   choices.forEach((skill) => {
     const btn = document.createElement("div");
     btn.style.cssText = `
-            background: #333; 
+            background: rgba(20, 20, 40, 0.9); 
             border: 2px solid ${skill.color}; 
             padding: 15px; 
             border-radius: 8px; 
@@ -202,9 +318,10 @@ function triggerLevelUp() {
             align-items: center;
             width: 100%;
             box-sizing: border-box;
+            box-shadow: 0 0 10px ${skill.color};
         `;
     btn.innerHTML = `
-            <strong style="color: ${skill.color}; font-size: 18px;">${skill.name}</strong>
+            <strong style="color: ${skill.color}; font-size: 18px; text-shadow: 0 0 5px ${skill.color};">${skill.name}</strong>
             <span style="color: #ddd; margin-top: 5px;">${skill.desc}</span>
         `;
 
@@ -212,13 +329,12 @@ function triggerLevelUp() {
       skill.apply();
       modal.style.display = "none";
       state.isPaused = false;
-      // 增加经验值需求
       state.xpToNextLevel = Math.floor(state.xpToNextLevel * 1.2);
       updateUI();
     };
 
-    btn.onmouseover = () => (btn.style.background = "#444");
-    btn.onmouseout = () => (btn.style.background = "#333");
+    btn.onmouseover = () => (btn.style.background = "rgba(40, 40, 60, 0.9)");
+    btn.onmouseout = () => (btn.style.background = "rgba(20, 20, 40, 0.9)");
 
     container.appendChild(btn);
   });
@@ -241,11 +357,11 @@ function spawnEnemy() {
   if (state.activeEnemies >= MAX_ENEMIES) return;
 
   const idx = state.activeEnemies;
-  state.enemyX[idx] = (Math.random() - 0.5) * 16;
-  state.enemyZ[idx] = -40;
+  state.enemyX[idx] = (Math.random() - 0.5) * 30; // 扩大生成范围
+  state.enemyZ[idx] = -60;
   // 随等级增加生命值
   state.enemyHP[idx] = 3 + Math.floor(state.level * 0.5);
-  state.enemySpeed[idx] = 0.05 + Math.random() * 0.05;
+  state.enemySpeed[idx] = 0.02 + Math.random() * 0.02;
 
   state.activeEnemies++;
 }
@@ -268,10 +384,14 @@ function spawnBullet(targetPos, angleOffset = 0) {
   if (state.activeBullets >= MAX_BULLETS) return;
 
   const idx = state.activeBullets;
-  state.bulletX[idx] = player.position.x;
-  state.bulletZ[idx] = player.position.z - 1;
+  state.bulletX[idx] = playerGroup.position.x;
+  state.bulletZ[idx] = playerGroup.position.z - 1.5;
 
-  const start = new THREE.Vector3(player.position.x, 0, player.position.z);
+  const start = new THREE.Vector3(
+    playerGroup.position.x,
+    0,
+    playerGroup.position.z
+  );
   const end = new THREE.Vector3(targetPos.x, 0, targetPos.z);
 
   // 方向向量
@@ -302,21 +422,30 @@ function removeBullet(index) {
   }
 }
 
+// 辉光粒子材质
+const glowTexture = createGlowTexture("rgba(0, 200, 255, 1)"); // 青色辉光
+const particleMat = new THREE.SpriteMaterial({
+  map: glowTexture,
+  color: 0xffffff,
+  transparent: true,
+  blending: THREE.AdditiveBlending,
+});
+
 function createExplosion(x, z) {
-  for (let i = 0; i < 3; i++) {
-    const geo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-    const mat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(x, 0.75, z);
+  for (let i = 0; i < 5; i++) {
+    // 增加粒子数量
+    const sprite = new THREE.Sprite(particleMat);
+    sprite.position.set(x, 1, z);
+    sprite.scale.set(2, 2, 2); // 初始大小
 
     const vel = new THREE.Vector3(
-      (Math.random() - 0.5) * 0.2,
-      Math.random() * 0.2,
-      (Math.random() - 0.5) * 0.2
+      (Math.random() - 0.5) * 0.3,
+      Math.random() * 0.3,
+      (Math.random() - 0.5) * 0.3
     );
 
-    scene.add(mesh);
-    state.particles.push({ mesh, vel, life: 20 });
+    scene.add(sprite);
+    state.particles.push({ mesh: sprite, vel, life: 30 });
   }
 }
 
@@ -340,7 +469,6 @@ function animate() {
 
   // 暂停逻辑
   if (state.gameOver || state.isPaused) {
-    // 仍然渲染场景，这样就不会变黑，但不更新逻辑
     renderer.render(scene, camera);
     return;
   }
@@ -355,8 +483,8 @@ function animate() {
   // 2. 更新敌人逻辑
   let nearestDist = Infinity;
   let targetIdx = -1;
-  const playerX = player.position.x;
-  const playerZ = player.position.z;
+  const playerX = playerGroup.position.x;
+  const playerZ = playerGroup.position.z;
 
   for (let i = 0; i < state.activeEnemies; i++) {
     // 移动敌人
@@ -372,7 +500,8 @@ function animate() {
     state.enemyZ[i] += vz;
 
     // 与玩家碰撞
-    if (dist < 2) {
+    if (dist < 3) {
+      // 增加碰撞半径以适应新模型
       state.health -= 10;
       updateUI();
       removeEnemy(i);
@@ -398,10 +527,9 @@ function animate() {
   // 3. 更新敌人视觉效果（实例）
   enemyMesh.count = state.activeEnemies;
   for (let i = 0; i < state.activeEnemies; i++) {
-    dummy.position.set(state.enemyX[i], 0.75, state.enemyZ[i]);
-    // 简单的上下浮动动画
-    dummy.position.y = 0.75 + Math.sin(now * 0.01 + state.enemyZ[i]) * 0.2;
-    dummy.rotation.set(0, 0, 0);
+    dummy.position.set(state.enemyX[i], 0.6, state.enemyZ[i]);
+    // 简单的摇晃动画
+    dummy.rotation.z = Math.sin(now * 0.01 + i) * 0.1;
     dummy.scale.set(1, 1, 1);
     dummy.updateMatrix();
     enemyMesh.setMatrixAt(i, dummy.matrix);
@@ -410,25 +538,20 @@ function animate() {
 
   // 4. 玩家旋转和射击
   if (targetIdx !== -1) {
-    player.lookAt(
+    // 计算目标角度
+    const targetPos = new THREE.Vector3(
       state.enemyX[targetIdx],
-      player.position.y,
+      0,
       state.enemyZ[targetIdx]
     );
+    playerGroup.lookAt(targetPos);
 
     if (now - state.lastShotTime > state.shotInterval) {
-      const targetPos = {
-        x: state.enemyX[targetIdx],
-        z: state.enemyZ[targetIdx],
-      };
-
       // 处理多重射击
       if (state.multiShot === 1) {
         spawnBullet(targetPos, 0);
       } else {
-        // 散射逻辑：例如 2 发 = -5 度, +5 度
-        // 3 发 = -10, 0, +10
-        const spread = 0.2; // 弧度（大约 10 度）
+        const spread = 0.2;
         const startAngle = -((state.multiShot - 1) * spread) / 2;
 
         for (let k = 0; k < state.multiShot; k++) {
@@ -439,7 +562,7 @@ function animate() {
       state.lastShotTime = now;
     }
   } else {
-    player.rotation.set(0, 0, 0);
+    playerGroup.rotation.set(0, 0, 0);
   }
 
   // 5. 更新子弹逻辑
@@ -451,7 +574,7 @@ function animate() {
     const bz = state.bulletZ[i];
 
     // 边界检查
-    if (bz < -60 || Math.abs(bx) > 20) {
+    if (bz < -80 || Math.abs(bx) > 40) {
       removeBullet(i);
       i--;
       continue;
@@ -475,11 +598,8 @@ function animate() {
           if (state.enemyHP[k] <= 0) {
             state.score += 10;
             gainXP(20); // 获得经验值
-          } else {
-            // 闪烁红色？使用 InstancedMesh 没有属性很难实现
           }
 
-          // 移除子弹（穿透逻辑可以在这里添加）
           removeBullet(i);
           i--;
           hit = true;
@@ -501,7 +621,9 @@ function animate() {
   bulletMesh.count = state.activeBullets;
   for (let i = 0; i < state.activeBullets; i++) {
     dummy.position.set(state.bulletX[i], 1, state.bulletZ[i]);
-    dummy.rotation.set(0, 0, 0);
+    // 计算子弹朝向
+    const angle = Math.atan2(state.bulletVX[i], state.bulletVZ[i]);
+    dummy.rotation.set(0, angle, 0);
     dummy.scale.set(1, 1, 1);
     dummy.updateMatrix();
     bulletMesh.setMatrixAt(i, dummy.matrix);
@@ -513,7 +635,8 @@ function animate() {
     const p = state.particles[i];
     p.mesh.position.add(p.vel);
     p.life--;
-    p.mesh.scale.multiplyScalar(0.9);
+    p.mesh.scale.multiplyScalar(0.9); // 快速缩小
+    p.mesh.material.opacity = p.life / 20; // 渐隐
     if (p.life <= 0) {
       scene.remove(p.mesh);
       state.particles.splice(i, 1);
