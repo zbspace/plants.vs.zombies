@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "星际射击小游戏",
+  "version": "1.0",
+  "action": {
+    "default_popup": "popup.html",
+    "default_width": 400,
+    "default_height": 500
+  }
+}
